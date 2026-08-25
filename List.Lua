@@ -20,4 +20,6 @@
         {
             "name": "Fish It",
             "status": "green"
-        },
+        }
+    ]
+}
