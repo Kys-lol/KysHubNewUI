@@ -1,0 +1,914 @@
+--// KYS UI LIBRARY - FULL ENGLISH & OBFUSCATOR-SAFE EDITION
+--// ------------------------------------------------------------
+
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
+
+local PREFIX = "[Kys UI Library]"
+local CHECK_INTERVAL = 0.5
+local INITIAL_RETRY = 60
+
+local Theme = {
+    Surface = Color3.fromRGB(20, 24, 30),
+    SurfaceHover = Color3.fromRGB(30, 36, 46),
+    SurfaceActive = Color3.fromRGB(35, 125, 255),
+    Surface2 = Color3.fromRGB(25, 32, 42),
+    Text = Color3.fromRGB(245, 248, 252),
+    SubText = Color3.fromRGB(168, 181, 196),
+    Muted = Color3.fromRGB(120, 135, 150),
+    Border = Color3.fromRGB(60, 75, 90),
+    Accent = Color3.fromRGB(35, 125, 255),
+    Error = Color3.fromRGB(255, 85, 90),
+    Success = Color3.fromRGB(85, 255, 140),
+    White = Color3.fromRGB(255, 255, 255),
+}
+
+local IconMap = {
+    ["studio"]          = { Asset = "rbxassetid://111544445642010", Fallback = "S" },
+    ["home"]            = { Asset = "rbxasset://textures/ui/Settings/Help/HelpIcon.png", Fallback = "H" },
+    ["info"]            = { Asset = "rbxasset://textures/ui/Settings/Help/Report.png", Fallback = "I" },
+    ["key"]             = { Asset = "rbxasset://textures/ui/Settings/Reset.png", Fallback = "K" },
+    ["settings"]        = { Asset = "rbxasset://textures/ui/Settings/SettingsIcon.png", Fallback = "*" },
+    ["sliders"]         = { Asset = "", Fallback = "=" },
+    ["check"]           = { Asset = "", Fallback = "V" },
+    ["chevron-right"]   = { Asset = "", Fallback = ">" },
+    ["alert-triangle"]  = { Asset = "rbxasset://textures/ui/Emotes/ErrorIcon.png", Fallback = "!" },
+}
+
+local RuntimeState = {}
+
+local function log(...) print(PREFIX, ...) end
+local function warnx(...) warn(PREFIX, ...) end
+
+local function tween(object, info, properties)
+    if not object then return end
+    local t = TweenService:Create(object, info, properties)
+    t:Play()
+    return t
+end
+
+local function safeCall(fn, ...)
+    if type(fn) == "function" then
+        local ok, err = pcall(fn, ...)
+        if not ok then warnx("Callback Exception:", err) end
+    end
+end
+
+local function getRobloxGui() return CoreGui:FindFirstChild("RobloxGui") end
+
+local function findRecursive(parent, name, className)
+    if not parent then return nil end
+    local direct = parent:FindFirstChild(name)
+    if direct and (not className or direct:IsA(className)) then return direct end
+    for _, obj in ipairs(parent:GetDescendants()) do
+        if obj.Name == name and (not className or obj:IsA(className)) then return obj end
+    end
+    return nil
+end
+
+local function findHelpContainer()
+    local RobloxGui = getRobloxGui()
+    if not RobloxGui then return nil end
+    return findRecursive(RobloxGui, "HelpPageContainer", "Frame")
+        or findRecursive(RobloxGui, "HelpPage", "Frame")
+        or findRecursive(RobloxGui, "HelpTabContainer", "Frame")
+end
+
+local function findHelpTab()
+    local RobloxGui = getRobloxGui()
+    if not RobloxGui then return nil end
+    local hubBar = findRecursive(RobloxGui, "HubBarContainer")
+    if not hubBar then return nil end
+    return hubBar:FindFirstChild("HelpTab") or findRecursive(hubBar, "HelpTab", "GuiObject")
+end
+
+local function corner(object, radius)
+    local c = object:FindFirstChild("KysCorner") or Instance.new("UICorner")
+    c.Name = "KysCorner"
+    c.CornerRadius = UDim.new(0, radius or 8)
+    c.Parent = object
+    return c
+end
+
+local function stroke(object, color, trans)
+    local s = object:FindFirstChild("KysStroke") or Instance.new("UIStroke")
+    s.Name = "KysStroke"
+    s.Thickness = 1
+    s.Color = color or Theme.Border
+    s.Transparency = trans or 0.4
+    s.Parent = object
+    return s
+end
+
+local function createText(parent, name, text, size, color, font)
+    local label = Instance.new("TextLabel")
+    label.Name = name
+    label.BackgroundTransparency = 1
+    label.Text = text or ""
+    label.TextSize = size or 14
+    label.TextColor3 = color or Theme.Text
+    label.Font = font or Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.Parent = parent
+    return label
+end
+
+local function createIcon(parent, iconKey, size, color)
+    local container = Instance.new("Frame")
+    container.Name = "IconContainer_" .. tostring(iconKey)
+    container.BackgroundTransparency = 1
+    container.Size = UDim2.fromOffset(size or 18, size or 18)
+    container.Parent = parent
+
+    local info = IconMap[iconKey] or IconMap["alert-triangle"]
+    
+    if info.Asset and info.Asset ~= "" then
+        local img = Instance.new("ImageLabel")
+        img.Name = "IconImage"
+        img.BackgroundTransparency = 1
+        img.Size = UDim2.new(1, 0, 1, 0)
+        img.Image = info.Asset
+        if color then img.ImageColor3 = color end
+        img.Parent = container
+    else
+        local txt = createText(container, "IconText", info.Fallback, size or 14, color or Theme.Text, Enum.Font.GothamBold)
+        txt.TextXAlignment = Enum.TextXAlignment.Center
+        txt.Size = UDim2.new(1, 0, 1, 0)
+    end
+
+    return container
+end
+
+local function disableParentsClipping(object)
+    local current = object
+    while current and current ~= game and not current:IsA("ScreenGui") do
+        if current:IsA("GuiObject") then current.ClipsDescendants = false end
+        current = current.Parent
+    end
+end
+
+-- ============================================================
+-- TAB CLASS & EXTENDED APIS
+-- ============================================================
+local TabClass = {}
+TabClass.__index = TabClass
+
+function TabClass:_addItem(item)
+    table.insert(self._items, item)
+    if self._library.ActiveTab == self then self._library:_updateContent() end
+    return item
+end
+
+function TabClass:AddButton(config)
+    config = config or {}
+    return self:_addItem({
+        Type = "Button",
+        Name = config.Name or "Button",
+        Description = config.Description or "",
+        Icon = config.Icon or "chevron-right",
+        Callback = config.Callback,
+        Order = config.Order or (#self._items + 1),
+    })
+end
+
+function TabClass:AddToggle(config)
+    config = config or {}
+    local flag = config.Flag or (self.Name .. "_" .. (config.Name or "Toggle"))
+    if RuntimeState[flag] == nil then RuntimeState[flag] = config.CurrentValue == true end
+    return self:_addItem({
+        Type = "Toggle",
+        Name = config.Name or "Toggle",
+        Description = config.Description or "",
+        Icon = config.Icon or "check",
+        Flag = flag,
+        Callback = config.Callback,
+        Order = config.Order or (#self._items + 1),
+    })
+end
+
+function TabClass:AddInfo(config)
+    config = config or {}
+    return self:_addItem({
+        Type = "Info",
+        Title = config.Title or "Information",
+        Message = config.Message or "",
+        Order = config.Order or (#self._items + 1),
+    })
+end
+
+function TabClass:AddDashboard(config)
+    config = config or {}
+    return self:_addItem({
+        Type = "Dashboard",
+        Title = config.Title or "System Dashboard",
+        Stats = config.Stats or { { Title = "Status", Value = "Active" } },
+        Logs = config.Logs or { "System initialized." },
+        Order = config.Order or (#self._items + 1),
+    })
+end
+
+function TabClass:AddTextInput(config)
+    config = config or {}
+    return self:_addItem({
+        Type = "TextInput",
+        Name = config.Name or "Input",
+        Placeholder = config.Placeholder or "Enter text...",
+        Callback = config.Callback,
+        Order = config.Order or (#self._items + 1),
+    })
+end
+
+-- ============================================================
+-- UI LIBRARY CORE
+-- ============================================================
+local Library = {}
+Library.__index = Library
+
+function Library:SetTheme(newTheme)
+    for k, v in pairs(newTheme) do
+        Theme[k] = v
+    end
+    if self.Root then self:_buildUI() end
+end
+
+function Library:SetMenuName(name)
+    self.MenuName = name
+    self:_forceMenuName()
+end
+
+function Library:SetStudioTitle(title)
+    self.StudioTitle = title
+    if self.SidebarTitleLabel then
+        self.SidebarTitleLabel.Text = string.upper(title)
+    end
+end
+
+function Library:AddTab(config)
+    config = config or {}
+    local tab = setmetatable({
+        Name = config.Name or "Tab",
+        Icon = config.Icon or "settings",
+        Order = config.Order or (#self.Tabs + 1),
+        _items = {},
+        _library = self,
+        _emptyMessage = config.EmptyMessage or "No features available in this tab.",
+    }, TabClass)
+    table.insert(self.Tabs, tab)
+    if not self.ActiveTab then self.ActiveTab = tab end
+    if self.Root then self:_buildUI() end
+    return tab
+end
+
+-- API SYSTEM SCAN & ACCELERATION ROBLOX UI
+function Library:SetUISpeed(speedMultiplier)
+    speedMultiplier = math.clamp(speedMultiplier or 1, 0.1, 10)
+    local robloxGui = getRobloxGui()
+    if not robloxGui then return end
+
+    local count = 0
+    for _, obj in ipairs(robloxGui:GetDescendants()) do
+        if obj:IsA("Tween") then
+            obj:Cancel()
+            count = count + 1
+        end
+    end
+    
+    log("UI Scan & Speed adjustment applied. Processed elements:", count, "Multiplier:", speedMultiplier)
+    return count
+end
+
+-- API KEY SYSTEM POPUP
+function Library:ShowKeySystem(config)
+    config = config or {}
+    local KeyName = config.Name or "Key Verification System"
+    local CorrectKey = config.Key or "SECRET123"
+    local GetKeyURL = config.GetKeyURL or "https://example.com/getkey"
+    local OnSuccess = config.OnSuccess
+
+    local parentGui = getRobloxGui() or CoreGui
+    local overlay = Instance.new("Frame")
+    overlay.Name = "KysKeySystemOverlay"
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    overlay.BackgroundTransparency = 0.5
+    overlay.ZIndex = 20000
+    overlay.Parent = parentGui
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.fromOffset(360, 220)
+    card.AnchorPoint = Vector2.new(0.5, 0.5)
+    card.Position = UDim2.new(0.5, 0, 0.4, 0)
+    card.BackgroundColor3 = Theme.Surface
+    card.ZIndex = 20001
+    card.Parent = overlay
+    corner(card, 12)
+    stroke(card, Theme.Accent, 0.2)
+
+    local title = createText(card, "Title", KeyName, 16, Theme.Text, Enum.Font.GothamBold)
+    title.Position = UDim2.fromOffset(20, 16)
+    title.Size = UDim2.new(1, -40, 0, 24)
+
+    local inputFrame = Instance.new("TextBox")
+    inputFrame.Size = UDim2.new(1, -40, 0, 42)
+    inputFrame.Position = UDim2.fromOffset(20, 56)
+    inputFrame.BackgroundColor3 = Theme.Surface2
+    inputFrame.PlaceholderText = "Enter Access Key..."
+    inputFrame.Text = ""
+    inputFrame.TextColor3 = Theme.Text
+    inputFrame.PlaceholderColor3 = Theme.Muted
+    inputFrame.Font = Enum.Font.Gotham
+    inputFrame.TextSize = 13
+    inputFrame.ZIndex = 20002
+    inputFrame.Parent = card
+    corner(inputFrame, 8)
+    stroke(inputFrame, Theme.Border, 0.5)
+
+    local getBtn = Instance.new("TextButton")
+    getBtn.Size = UDim2.new(0.46, 0, 0, 40)
+    getBtn.Position = UDim2.fromOffset(20, 115)
+    getBtn.BackgroundColor3 = Theme.Surface2
+    getBtn.Text = "Get Key"
+    getBtn.TextColor3 = Theme.SubText
+    getBtn.Font = Enum.Font.GothamMedium
+    getBtn.TextSize = 13
+    getBtn.ZIndex = 20002
+    getBtn.Parent = card
+    corner(getBtn, 8)
+
+    local verifyBtn = Instance.new("TextButton")
+    verifyBtn.Size = UDim2.new(0.46, 0, 0, 40)
+    verifyBtn.Position = UDim2.new(1, -20 - (360 * 0.46), 0, 115)
+    verifyBtn.BackgroundColor3 = Theme.Accent
+    verifyBtn.Text = "Verify Key"
+    verifyBtn.TextColor3 = Theme.White
+    verifyBtn.Font = Enum.Font.GothamBold
+    verifyBtn.TextSize = 13
+    verifyBtn.ZIndex = 20002
+    verifyBtn.Parent = card
+    corner(verifyBtn, 8)
+
+    local statusLabel = createText(card, "Status", "", 12, Theme.Error, Enum.Font.Gotham)
+    statusLabel.Position = UDim2.fromOffset(20, 170)
+    statusLabel.Size = UDim2.new(1, -40, 0, 20)
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+    getBtn.Activated:Connect(function()
+        if setclipboard then
+            setclipboard(GetKeyURL)
+            statusLabel.TextColor3 = Theme.Success
+            statusLabel.Text = "Key link copied to Clipboard!"
+        else
+            statusLabel.TextColor3 = Theme.SubText
+            statusLabel.Text = GetKeyURL
+        end
+    end)
+
+    verifyBtn.Activated:Connect(function()
+        if inputFrame.Text == CorrectKey then
+            statusLabel.TextColor3 = Theme.Success
+            statusLabel.Text = "Valid Key! Opening UI..."
+            task.wait(0.5)
+            overlay:Destroy()
+            safeCall(OnSuccess)
+        else
+            statusLabel.TextColor3 = Theme.Error
+            statusLabel.Text = "Invalid Key! Please try again."
+        end
+    end)
+
+    card.Position = UDim2.new(0.5, 0, 0.45, 0)
+    card.BackgroundTransparency = 1
+    tween(card, TweenInfo.new(0.3), { Position = UDim2.new(0.5, 0, 0.4, 0), BackgroundTransparency = 0 })
+end
+
+function Library:_forceMenuName()
+    local helpTab = findHelpTab()
+    if not helpTab then return end
+    local tabLabel = findRecursive(helpTab, "TabLabel", "GuiObject")
+    if not tabLabel then return end
+    local title = findRecursive(tabLabel, "Title")
+    if title and (title:IsA("TextLabel") or title:IsA("TextButton") or title:IsA("TextBox")) then
+        title.Text = self.MenuName or "Library Studio"
+    end
+end
+
+function Library:_createRoot(container)
+    local root = Instance.new("Frame")
+    root.Name = "KysMenuContent"
+    root.BackgroundTransparency = 1
+    root.BorderSizePixel = 0
+    root.ClipsDescendants = false
+    root.ZIndex = 999
+    root.Parent = container
+    return root
+end
+
+function Library:_updateRootBounds()
+    if not self.Root or not self.Root.Parent then return end
+    local parent = self.Root.Parent
+    disableParentsClipping(parent)
+
+    local pageView = parent
+    while pageView and pageView.Name ~= "PageView" and pageView.Name ~= "Page" and pageView.Parent ~= game do
+        pageView = pageView.Parent
+    end
+
+    if pageView and pageView:IsA("GuiObject") then
+        local targetSize = pageView.AbsoluteSize
+        local targetPos = pageView.AbsolutePosition
+        local parentPos = parent.AbsolutePosition
+        self.Root.Position = UDim2.fromOffset(targetPos.X - parentPos.X, targetPos.Y - parentPos.Y)
+        self.Root.Size = UDim2.fromOffset(targetSize.X, targetSize.Y)
+    else
+        self.Root.Position = UDim2.fromOffset(-15, -60)
+        self.Root.Size = UDim2.new(1, 30, 1, 120)
+    end
+end
+
+function Library:_createSidebar(root, sidebarWidth, margin)
+    local sidebar = Instance.new("Frame")
+    sidebar.Name = "Sidebar"
+    sidebar.BackgroundTransparency = 1
+    sidebar.BorderSizePixel = 0
+    sidebar.Position = UDim2.fromOffset(margin, margin)
+    sidebar.Size = UDim2.new(0, sidebarWidth, 1, -(margin * 2))
+    sidebar.ZIndex = 1000
+    sidebar.Parent = root
+
+    local headerContainer = Instance.new("Frame")
+    headerContainer.Name = "SidebarHeader"
+    headerContainer.BackgroundTransparency = 1
+    headerContainer.Position = UDim2.fromOffset(4, 0)
+    headerContainer.Size = UDim2.new(1, -8, 0, 20)
+    headerContainer.Parent = sidebar
+
+    local studioIcon = createIcon(headerContainer, "studio", 16, nil)
+    studioIcon.Position = UDim2.fromOffset(0, 2)
+
+    local title = createText(headerContainer, "SidebarTitle", string.upper(self.StudioTitle or "Studio Hub"), 11, Theme.Muted, Enum.Font.GothamBold)
+    title.Position = UDim2.fromOffset(22, 0)
+    title.Size = UDim2.new(1, -22, 1, 0)
+    self.SidebarTitleLabel = title
+
+    local divider = Instance.new("Frame")
+    divider.Name = "TabDivider"
+    divider.BackgroundColor3 = Theme.Border
+    divider.BackgroundTransparency = 0.4
+    divider.BorderSizePixel = 0
+    divider.Position = UDim2.new(1, 4, 0, 0)
+    divider.Size = UDim2.new(0, 1, 1, 0)
+    divider.ZIndex = 1002
+    divider.Parent = sidebar
+
+    local list = Instance.new("ScrollingFrame")
+    list.Name = "TabList"
+    list.BackgroundTransparency = 1
+    list.BorderSizePixel = 0
+    list.Position = UDim2.fromOffset(0, 24)
+    list.Size = UDim2.new(1, 0, 1, -24)
+    list.ScrollBarThickness = 2
+    list.ScrollBarImageColor3 = Theme.Accent
+    list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    list.CanvasSize = UDim2.new()
+    list.ZIndex = 1001
+    list.Parent = sidebar
+
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 4)
+    layout.Parent = list
+
+    self.TabButtons = {}
+
+    for _, tab in ipairs(self.Tabs) do
+        local selected = self.ActiveTab == tab
+        local button = Instance.new("TextButton")
+        button.Name = "Tab_" .. tostring(tab.Name):gsub("%W", "")
+        button.BackgroundColor3 = selected and Theme.SurfaceActive or Theme.Surface
+        button.BackgroundTransparency = selected and 0.2 or 1
+        button.BorderSizePixel = 0
+        button.Size = UDim2.new(1, -6, 0, 38)
+        button.LayoutOrder = tab.Order
+        button.Text = ""
+        button.AutoButtonColor = false
+        button.ZIndex = 1002
+        button.Parent = list
+
+        corner(button, 6)
+
+        local iconContainer = createIcon(button, tab.Icon, 18, selected and Theme.White or Theme.SubText)
+        iconContainer.AnchorPoint = Vector2.new(0, 0.5)
+        iconContainer.Position = UDim2.new(0, 10, 0.5, 0)
+        iconContainer.ZIndex = 1003
+
+        local label = createText(button, "Label", tab.Name, 13, selected and Theme.White or Theme.SubText, Enum.Font.GothamMedium)
+        label.Position = UDim2.fromOffset(36, 0)
+        label.Size = UDim2.new(1, -42, 1, 0)
+        label.TextTruncate = Enum.TextTruncate.AtEnd
+
+        self.TabButtons[tab] = { Button = button, Icon = iconContainer, Label = label }
+
+        button.Activated:Connect(function()
+            if self.ActiveTab == tab then return end
+            self.ActiveTab = tab
+            self:_updateTabStyles()
+            self:_updateContent()
+        end)
+    end
+
+    return sidebar
+end
+
+function Library:_updateTabStyles()
+    local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    for tab, elements in pairs(self.TabButtons) do
+        local selected = self.ActiveTab == tab
+        local targetColor = selected and Theme.SurfaceActive or Theme.Surface
+        local targetTrans = selected and 0.2 or 1
+        local targetTextCol = selected and Theme.White or Theme.SubText
+
+        tween(elements.Button, tweenInfo, {
+            BackgroundColor3 = targetColor,
+            BackgroundTransparency = targetTrans
+        })
+        tween(elements.Label, tweenInfo, { TextColor3 = targetTextCol })
+        
+        for _, child in ipairs(elements.Icon:GetChildren()) do
+            if child:IsA("ImageLabel") then tween(child, tweenInfo, { ImageColor3 = targetTextCol }) end
+            if child:IsA("TextLabel") then tween(child, tweenInfo, { TextColor3 = targetTextCol }) end
+        end
+    end
+end
+
+function Library:_createContentArea(root, contentX, margin)
+    local content = Instance.new("Frame")
+    content.Name = "Content"
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.Position = UDim2.fromOffset(contentX, margin)
+    content.Size = UDim2.new(1, -contentX - margin, 1, -(margin * 2))
+    content.ZIndex = 1000
+    content.Parent = root
+
+    local header = createText(content, "Header", "", 22, Theme.Text, Enum.Font.GothamBold)
+    header.Position = UDim2.fromOffset(0, 0)
+    header.Size = UDim2.new(1, 0, 0, 26)
+
+    local description = createText(content, "Description", "Features and Settings", 12, Theme.SubText, Enum.Font.Gotham)
+    description.Position = UDim2.fromOffset(0, 26)
+    description.Size = UDim2.new(1, 0, 0, 20)
+
+    local line = Instance.new("Frame")
+    line.BackgroundColor3 = Theme.Border
+    line.BackgroundTransparency = 0.55
+    line.BorderSizePixel = 0
+    line.Position = UDim2.fromOffset(0, 54)
+    line.Size = UDim2.new(1, 0, 0, 1)
+    line.ZIndex = 1001
+    line.Parent = content
+
+    local featureArea = Instance.new("ScrollingFrame")
+    featureArea.Name = "FeatureArea"
+    featureArea.BackgroundTransparency = 1
+    featureArea.BorderSizePixel = 0
+    featureArea.Position = UDim2.fromOffset(0, 62)
+    featureArea.Size = UDim2.new(1, 0, 1, -62)
+    featureArea.ScrollBarThickness = 3
+    featureArea.ScrollBarImageColor3 = Theme.Accent
+    featureArea.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    featureArea.CanvasSize = UDim2.new()
+    featureArea.ZIndex = 1001
+    featureArea.Parent = content
+
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 8)
+    layout.Parent = featureArea
+
+    self.ContentHeader = header
+    self.FeatureArea = featureArea
+
+    self:_updateContent()
+end
+
+function Library:_updateContent()
+    if not self.ContentHeader or not self.FeatureArea then return end
+    
+    self.ContentHeader.Text = self.ActiveTab and self.ActiveTab.Name or "Menu"
+    self.FeatureArea:ClearAllChildren()
+
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 8)
+    layout.Parent = self.FeatureArea
+
+    self.FeatureArea.Position = UDim2.fromOffset(0, 72)
+    tween(self.FeatureArea, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(0, 62)
+    })
+
+    if not self.ActiveTab or #self.ActiveTab._items == 0 then
+        local empty = Instance.new("Frame")
+        empty.Name = "EmptyState"
+        empty.BackgroundTransparency = 1
+        empty.AnchorPoint = Vector2.new(0.5, 0.5)
+        empty.Position = UDim2.new(0.5, 0, 0.4, 0)
+        empty.Size = UDim2.new(1, -20, 0, 100)
+        empty.ZIndex = 1010
+        empty.Parent = self.FeatureArea
+
+        local errIcon = createIcon(empty, "alert-triangle", 44, Theme.Error)
+        errIcon.AnchorPoint = Vector2.new(0.5, 0)
+        errIcon.Position = UDim2.new(0.5, 0, 0, 0)
+        errIcon.ZIndex = 1011
+
+        local errorText = createText(empty, "ErrorText", self.ActiveTab and self.ActiveTab._emptyMessage or "No components available.", 14, Theme.Text, Enum.Font.GothamMedium)
+        errorText.TextXAlignment = Enum.TextXAlignment.Center
+        errorText.Position = UDim2.fromOffset(0, 52)
+        errorText.Size = UDim2.new(1, 0, 0, 24)
+        return
+    end
+
+    for _, item in ipairs(self.ActiveTab._items) do
+        if item.Type == "Button" then
+            self:_renderButton(self.FeatureArea, item)
+        elseif item.Type == "Toggle" then
+            self:_renderToggle(self.FeatureArea, item)
+        elseif item.Type == "Info" then
+            self:_renderInfo(self.FeatureArea, item)
+        elseif item.Type == "Dashboard" then
+            self:_renderDashboard(self.FeatureArea, item)
+        elseif item.Type == "TextInput" then
+            self:_renderTextInput(self.FeatureArea, item)
+        end
+    end
+end
+
+function Library:_renderButton(parent, item)
+    local btn = Instance.new("TextButton")
+    btn.Name = "FeatureButton"
+    btn.BackgroundColor3 = Theme.Surface2
+    btn.BackgroundTransparency = 0.2
+    btn.Size = UDim2.new(1, 0, 0, 48)
+    btn.LayoutOrder = item.Order
+    btn.Text = ""
+    btn.Parent = parent
+    corner(btn, 8)
+    stroke(btn)
+
+    local icon = createIcon(btn, item.Icon, 20, Theme.Text)
+    icon.Position = UDim2.fromOffset(12, 14)
+
+    local title = createText(btn, "Title", item.Name, 14, Theme.Text, Enum.Font.GothamMedium)
+    title.Position = UDim2.fromOffset(42, 6)
+    title.Size = UDim2.new(1, -50, 0, 18)
+
+    local desc = createText(btn, "Desc", item.Description, 11, Theme.SubText, Enum.Font.Gotham)
+    desc.Position = UDim2.fromOffset(42, 24)
+    desc.Size = UDim2.new(1, -50, 0, 16)
+
+    local twInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    btn.MouseEnter:Connect(function() tween(btn, twInfo, { BackgroundTransparency = 0.05 }) end)
+    btn.MouseLeave:Connect(function() tween(btn, twInfo, { BackgroundTransparency = 0.2 }) end)
+    btn.Activated:Connect(function() safeCall(item.Callback) end)
+end
+
+function Library:_renderToggle(parent, item)
+    local btn = Instance.new("TextButton")
+    btn.Name = "FeatureToggle"
+    btn.BackgroundColor3 = Theme.Surface2
+    btn.BackgroundTransparency = 0.2
+    btn.Size = UDim2.new(1, 0, 0, 48)
+    btn.LayoutOrder = item.Order
+    btn.Text = ""
+    btn.Parent = parent
+    corner(btn, 8)
+    stroke(btn)
+
+    local icon = createIcon(btn, item.Icon, 20, Theme.Text)
+    icon.Position = UDim2.fromOffset(12, 14)
+
+    local title = createText(btn, "Title", item.Name, 14, Theme.Text, Enum.Font.GothamMedium)
+    title.Position = UDim2.fromOffset(42, 14)
+
+    local switch = Instance.new("Frame")
+    switch.Size = UDim2.fromOffset(38, 18)
+    switch.AnchorPoint = Vector2.new(1, 0.5)
+    switch.Position = UDim2.new(1, -12, 0.5, 0)
+    switch.BackgroundColor3 = RuntimeState[item.Flag] and Theme.Accent or Theme.Border
+    switch.Parent = btn
+    corner(switch, 9)
+
+    btn.Activated:Connect(function()
+        RuntimeState[item.Flag] = not RuntimeState[item.Flag]
+        local targetColor = RuntimeState[item.Flag] and Theme.Accent or Theme.Border
+        tween(switch, TweenInfo.new(0.25), { BackgroundColor3 = targetColor })
+        safeCall(item.Callback, RuntimeState[item.Flag])
+    end)
+end
+
+function Library:_renderInfo(parent, item)
+    local box = Instance.new("Frame")
+    box.BackgroundColor3 = Theme.Surface2
+    box.BackgroundTransparency = 0.4
+    box.Size = UDim2.new(1, 0, 0, 60)
+    box.LayoutOrder = item.Order
+    box.Parent = parent
+    corner(box, 8)
+    stroke(box, Theme.Accent, 0.5)
+
+    local title = createText(box, "Title", item.Title, 13, Theme.Accent, Enum.Font.GothamBold)
+    title.Position = UDim2.fromOffset(12, 8)
+
+    local msg = createText(box, "Msg", item.Message, 11, Theme.SubText, Enum.Font.Gotham)
+    msg.Position = UDim2.fromOffset(12, 28)
+    msg.Size = UDim2.new(1, -24, 0, 26)
+end
+
+function Library:_renderDashboard(parent, item)
+    local container = Instance.new("Frame")
+    container.BackgroundColor3 = Theme.Surface2
+    container.BackgroundTransparency = 0.3
+    container.Size = UDim2.new(1, 0, 0, 160)
+    container.LayoutOrder = item.Order
+    container.Parent = parent
+    corner(container, 8)
+    stroke(container)
+
+    local title = createText(container, "Title", item.Title, 14, Theme.Text, Enum.Font.GothamBold)
+    title.Position = UDim2.fromOffset(12, 10)
+
+    local statsFrame = Instance.new("Frame")
+    statsFrame.Position = UDim2.fromOffset(12, 36)
+    statsFrame.Size = UDim2.new(1, -24, 0, 40)
+    statsFrame.BackgroundTransparency = 1
+    statsFrame.Parent = container
+
+    local statsLayout = Instance.new("UIListLayout")
+    statsLayout.FillDirection = Enum.FillDirection.Horizontal
+    statsLayout.Padding = UDim.new(0, 10)
+    statsLayout.Parent = statsFrame
+
+    for _, st in ipairs(item.Stats) do
+        local card = Instance.new("Frame")
+        card.Size = UDim2.new(0, 100, 1, 0)
+        card.BackgroundColor3 = Theme.Surface
+        card.Parent = statsFrame
+        corner(card, 6)
+
+        local stVal = createText(card, "Val", tostring(st.Value), 13, Theme.Accent, Enum.Font.GothamBold)
+        stVal.Position = UDim2.fromOffset(8, 4)
+        local stLbl = createText(card, "Lbl", st.Title, 10, Theme.Muted, Enum.Font.Gotham)
+        stLbl.Position = UDim2.fromOffset(8, 20)
+    end
+
+    local logTitle = createText(container, "LogTitle", "Update Logs / Activity", 11, Theme.SubText, Enum.Font.GothamBold)
+    logTitle.Position = UDim2.fromOffset(12, 84)
+
+    local logScroll = Instance.new("ScrollingFrame")
+    logScroll.Position = UDim2.fromOffset(12, 102)
+    logScroll.Size = UDim2.new(1, -24, 0, 48)
+    logScroll.BackgroundTransparency = 1
+    logScroll.ScrollBarThickness = 2
+    logScroll.Parent = container
+
+    local logLayout = Instance.new("UIListLayout")
+    logLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    logLayout.Padding = UDim.new(0, 2)
+    logLayout.Parent = logScroll
+
+    for _, logText in ipairs(item.Logs) do
+        local entry = createText(logScroll, "LogEntry", "- " .. logText, 11, Theme.SubText, Enum.Font.Gotham)
+        entry.Size = UDim2.new(1, 0, 0, 14)
+    end
+end
+
+function Library:_renderTextInput(parent, item)
+    local box = Instance.new("Frame")
+    box.BackgroundColor3 = Theme.Surface2
+    box.BackgroundTransparency = 0.2
+    box.Size = UDim2.new(1, 0, 0, 50)
+    box.LayoutOrder = item.Order
+    box.Parent = parent
+    corner(box, 8)
+    stroke(box)
+
+    local title = createText(box, "Title", item.Name, 13, Theme.Text, Enum.Font.GothamMedium)
+    title.Position = UDim2.fromOffset(12, 15)
+
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(0, 140, 0, 28)
+    input.AnchorPoint = Vector2.new(1, 0.5)
+    input.Position = UDim2.new(1, -12, 0.5, 0)
+    input.BackgroundColor3 = Theme.Surface
+    input.PlaceholderText = item.Placeholder
+    input.Text = ""
+    input.TextColor3 = Theme.Text
+    input.PlaceholderColor3 = Theme.Muted
+    input.Font = Enum.Font.Gotham
+    input.TextSize = 12
+    input.Parent = box
+    corner(input, 6)
+
+    input.FocusLost:Connect(function(enterPressed)
+        if enterPressed then safeCall(item.Callback, input.Text) end
+    end)
+end
+
+function Library:_buildUI()
+    if not self.Root or not self.Root.Parent then return end
+    self.Root:ClearAllChildren()
+
+    self:_updateRootBounds()
+
+    local width = self.Root.AbsoluteSize.X
+    local margin = 12
+    local sidebarWidth = math.clamp(math.floor(width * 0.22), 140, 200)
+    local gap = 16
+    local contentX = margin + sidebarWidth + gap
+
+    self:_createSidebar(self.Root, sidebarWidth, margin)
+    self:_createContentArea(self.Root, contentX, margin)
+end
+
+function Library:Mount(container)
+    if not container then return false end
+
+    for _, child in ipairs(container:GetChildren()) do
+        if child:IsA("GuiObject") and child.Name ~= "KysMenuContent" then
+            child.Visible = false
+        end
+    end
+
+    local root = container:FindFirstChild("KysMenuContent")
+    if root and not root:IsA("Frame") then
+        root:Destroy()
+        root = nil
+    end
+
+    if not root then root = self:_createRoot(container) end
+    root.Visible = true
+
+    self.Root = root
+    self:_buildUI()
+
+    if self._sizeConnection then self._sizeConnection:Disconnect() end
+    self._sizeConnection = container:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        self:_updateRootBounds()
+    end)
+
+    return true
+end
+
+local function CreateLibrary()
+    return setmetatable({
+        Tabs = {},
+        ActiveTab = nil,
+        Root = nil,
+        MenuName = "Library Studio",
+        StudioTitle = "Studio Hub",
+        _sizeConnection = nil,
+    }, Library)
+end
+
+local KysMenu = CreateLibrary()
+
+local function ensureMenu()
+    local container = findHelpContainer()
+    if not container then return false end
+
+    for _, child in ipairs(container:GetChildren()) do
+        if child:IsA("GuiObject") and child.Name ~= "KysMenuContent" then
+            child.Visible = false
+        end
+    end
+
+    if not KysMenu.Root or not KysMenu.Root.Parent then
+        KysMenu:Mount(container)
+    else
+        KysMenu.Root.Visible = true
+    end
+
+    KysMenu:_forceMenuName()
+    return true
+end
+
+task.spawn(function()
+    log("Kys UI Library starting...")
+    task.wait(1)
+
+    for attempt = 1, INITIAL_RETRY do
+        local ok, result = pcall(ensureMenu)
+        if ok and result then break end
+        task.wait(0.5)
+    end
+
+    while task.wait(CHECK_INTERVAL) do
+        pcall(ensureMenu)
+    end
+end)
+
+return KysMenu
