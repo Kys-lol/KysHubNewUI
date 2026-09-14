@@ -1,15 +1,3 @@
---// LIBRARY STUDIO UI LIBRARY
---// BASELINE-PRESERVED / LOW-LAG / EXTENDED API / LUCIDE SUPPORT
---// ------------------------------------------------------------
---// Original UI structure is intentionally preserved.
---// Optimization focuses on:
---//   1. Removing constant CoreGui descendant scans.
---//   2. Cleaning old render connections.
---//   3. Event-driven CoreGui recovery.
---//   4. Adding APIs without replacing the existing visual structure.
---//   5. Optional Lucide icons through Footagesus Icons V2.
---//   6. Clean, readable Luau API for the non-obfuscated library build.
-
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
@@ -18,17 +6,10 @@ local PREFIX = "[Roblox Studio]"
 local INITIAL_RETRY = 60
 local RECOVERY_DELAY = 3
 
--- The CoreGui traversal lives in a separate, optionally obfuscated file.
--- Replace this with your own raw GitHub URL.
 local CORE_GUI_INJECTOR_URL = "https://raw.githubusercontent.com/Kys-lol/KysHubNewUI/refs/heads/main/Injector.lua"
 
--- ============================================================
--- THEME
--- ============================================================
-
 local Theme = {
-    -- Neutral Roblox-like surfaces. The library itself never paints a
-    -- full-page background; the native Help container remains visible.
+
     Surface = Color3.fromRGB(46, 47, 50),
     SurfaceHover = Color3.fromRGB(57, 59, 63),
     SurfaceActive = Color3.fromRGB(0, 162, 255),
@@ -47,10 +28,6 @@ local Theme = {
 
     White = Color3.fromRGB(255, 255, 255),
 }
-
--- ============================================================
--- FALLBACK ICONS
--- ============================================================
 
 local IconMap = {
     ["studio"] = {
@@ -143,10 +120,6 @@ local IconMap = {
         Fallback = "?"
     },
 }
-
--- ============================================================
--- RUNTIME
--- ============================================================
 
 local RuntimeState = {}
 local SearchRegistry = {}
@@ -275,10 +248,6 @@ local function tween(object, info, properties)
     return nil
 end
 
--- ============================================================
--- CORE GUI INJECTOR BRIDGE
--- ============================================================
-
 local Injector = nil
 
 local function loadInjector()
@@ -321,10 +290,6 @@ local function loadInjector()
     log("CoreGui injector loaded.")
     return Injector
 end
-
--- ============================================================
--- UI HELPERS
--- ============================================================
 
 local function corner(object, radius)
     if not object then
@@ -381,10 +346,6 @@ local function createText(parent, name, text, size, color, font)
 
     return label
 end
-
--- ============================================================
--- LUCIDE LOADER
--- ============================================================
 
 local function loadLucide()
     if IconsV2 then
@@ -474,10 +435,6 @@ task.spawn(function()
     pcall(loadLucide)
 end)
 
--- ============================================================
--- ICON
--- ============================================================
-
 local function createIcon(parent, iconKey, size, color)
     local container = Instance.new("Frame")
 
@@ -539,15 +496,8 @@ local function createIcon(parent, iconKey, size, color)
 end
 
 local function disableParentsClipping(object)
-    -- Intentionally disabled.
-    -- The previous implementation modified every ancestor's
-    -- ClipsDescendants property and allowed content to bleed outside
-    -- Roblox's Help container. Native clipping is now preserved.
-end
 
--- ============================================================
--- TAB CLASS
--- ============================================================
+end
 
 local TabClass = {}
 TabClass.__index = TabClass
@@ -789,16 +739,8 @@ function TabClass:AddCustomGUI(config)
     })
 end
 
--- ============================================================
--- LIBRARY
--- ============================================================
-
 local Library = {}
 Library.__index = Library
-
--- ============================================================
--- THEME API
--- ============================================================
 
 function Library:SetTheme(newTheme)
     if type(newTheme) ~= "table" then
@@ -843,10 +785,6 @@ function Library:GetTheme()
     return copy
 end
 
--- ============================================================
--- NAME API
--- ============================================================
-
 function Library:SetMenuName(name)
     self.MenuName = tostring(name or "Library Studio")
     self:_forceMenuName()
@@ -859,10 +797,6 @@ function Library:SetStudioTitle(title)
         self.SidebarTitleLabel.Text = string.upper(self.StudioTitle)
     end
 end
-
--- ============================================================
--- TAB API
--- ============================================================
 
 function Library:AddTab(config)
     config = config or {}
@@ -889,10 +823,6 @@ function Library:AddTab(config)
 
     return tab
 end
-
--- ============================================================
--- STATE API
--- ============================================================
 
 function Library:SetValue(flag, value)
     RuntimeState[flag] = value
@@ -940,10 +870,6 @@ function Library:SetConfig(config)
 
     return true
 end
-
--- ============================================================
--- FILE CONFIG API
--- ============================================================
 
 local function canUseFileSystem()
     return type(isfile) == "function"
@@ -1071,10 +997,6 @@ function Library:StopAutoSave()
     AutoSaveThread = nil
 end
 
--- ============================================================
--- SEARCH API
--- ============================================================
-
 function Library:_rebuildSearchIndex()
     table.clear(SearchRegistry)
 
@@ -1110,10 +1032,6 @@ function Library:Search(query)
 
     return results
 end
-
--- ============================================================
--- NOTIFICATION API
--- ============================================================
 
 function Library:Notify(config)
     config = config or {}
@@ -1200,10 +1118,6 @@ function Library:Notify(config)
     return notification
 end
 
--- ============================================================
--- LEGACY UI SPEED API
--- ============================================================
-
 function Library:SetUISpeed(speedMultiplier)
     speedMultiplier = math.clamp(
         tonumber(speedMultiplier) or 1,
@@ -1213,10 +1127,6 @@ function Library:SetUISpeed(speedMultiplier)
 
     self.UISpeed = speedMultiplier
 
-    -- Kept for API compatibility.
-    -- The old version scanned all RobloxGui descendants for Tween
-    -- instances every time this API was called.
-    -- That scan was removed because it could cause unnecessary work.
     return speedMultiplier
 end
 
@@ -1229,10 +1139,6 @@ function Library:SetSliderCallbackRate(rate)
     self._sliderCallbackInterval = 1 / rate
     return rate
 end
-
--- ============================================================
--- KEY SYSTEM
--- ============================================================
 
 function Library:ShowKeySystem(config)
     config = config or {}
@@ -1380,10 +1286,6 @@ function Library:ShowKeySystem(config)
     return overlay
 end
 
--- ============================================================
--- CORE GUI MENU NAME
--- ============================================================
-
 function Library:_forceMenuName()
     local injector = loadInjector()
 
@@ -1393,10 +1295,6 @@ function Library:_forceMenuName()
         end)
     end
 end
-
--- ============================================================
--- ROOT
--- ============================================================
 
 function Library:_createRoot(container)
     local root = Instance.new("Frame")
@@ -1418,15 +1316,9 @@ function Library:_updateRootBounds()
         return
     end
 
-    -- IMPORTANT: size against the actual HelpPageContainer, never PageView.
-    -- This prevents content from escaping the native Roblox Help boundary.
     self.Root.Position = UDim2.fromOffset(0, 0)
     self.Root.Size = UDim2.new(1, 0, 1, 0)
 end
-
--- ============================================================
--- SIDEBAR
--- ============================================================
 
 function Library:_createSidebar(root, sidebarWidth, margin)
     local sidebar = Instance.new("Frame")
@@ -1618,10 +1510,6 @@ function Library:GetTabs()
     return self.Tabs
 end
 
--- ============================================================
--- TAB STYLES
--- ============================================================
-
 function Library:_updateTabStyles()
     local tweenInfo = TweenInfo.new(
         0.25,
@@ -1679,10 +1567,6 @@ function Library:_updateTabStyles()
         end
     end
 end
-
--- ============================================================
--- CONTENT AREA
--- ============================================================
 
 function Library:_createContentArea(root, contentX, margin)
     local content = Instance.new("Frame")
@@ -1762,10 +1646,6 @@ function Library:_createContentArea(root, contentX, margin)
 
     self:_updateContent()
 end
-
--- ============================================================
--- CONTENT UPDATE
--- ============================================================
 
 function Library:_updateContent()
     if not self.ContentHeader or not self.FeatureArea then
@@ -1885,10 +1765,6 @@ function Library:_updateContent()
     end
 end
 
--- ============================================================
--- BUTTON
--- ============================================================
-
 function Library:_renderButton(parent, item)
     local btn = Instance.new("TextButton")
 
@@ -1968,10 +1844,6 @@ function Library:_renderButton(parent, item)
     end, true)
 end
 
--- ============================================================
--- TOGGLE
--- ============================================================
-
 function Library:_renderToggle(parent, item)
     local btn = Instance.new("TextButton")
 
@@ -2048,10 +1920,6 @@ function Library:_renderToggle(parent, item)
     end, true)
 end
 
--- ============================================================
--- INFO
--- ============================================================
-
 function Library:_renderInfo(parent, item)
     local box = Instance.new("Frame")
 
@@ -2089,10 +1957,6 @@ function Library:_renderInfo(parent, item)
     msg.Size = UDim2.new(1, -24, 0, 26)
     msg.TextWrapped = true
 end
-
--- ============================================================
--- DASHBOARD
--- ============================================================
 
 function Library:_renderDashboard(parent, item)
     local container = Instance.new("Frame")
@@ -2207,10 +2071,6 @@ function Library:_renderDashboard(parent, item)
     end
 end
 
--- ============================================================
--- TEXT INPUT
--- ============================================================
-
 function Library:_renderTextInput(parent, item)
     local box = Instance.new("Frame")
 
@@ -2266,10 +2126,6 @@ function Library:_renderTextInput(parent, item)
     end, true)
 end
 
--- ============================================================
--- LABEL
--- ============================================================
-
 function Library:_renderLabel(parent, item)
     local label = createText(
         parent,
@@ -2283,10 +2139,6 @@ function Library:_renderLabel(parent, item)
     label.Size = UDim2.new(1, 0, 0, 28)
     label.LayoutOrder = item.Order
 end
-
--- ============================================================
--- PARAGRAPH
--- ============================================================
 
 function Library:_renderParagraph(parent, item)
     local box = Instance.new("Frame")
@@ -2326,10 +2178,6 @@ function Library:_renderParagraph(parent, item)
     content.TextYAlignment = Enum.TextYAlignment.Top
 end
 
--- ============================================================
--- SECTION
--- ============================================================
-
 function Library:_renderSection(parent, item)
     local container = Instance.new("Frame")
 
@@ -2358,10 +2206,6 @@ function Library:_renderSection(parent, item)
     line.Size = UDim2.new(1, 0, 0, 1)
     line.Parent = container
 end
-
--- ============================================================
--- SLIDER
--- ============================================================
 
 function Library:_renderSlider(parent, item)
     local box = Instance.new("Frame")
@@ -2517,10 +2361,6 @@ function Library:_renderSlider(parent, item)
         end
     end, true)
 end
-
--- ============================================================
--- DROPDOWN
--- ============================================================
 
 function Library:_renderDropdown(parent, item)
     local box = Instance.new("Frame")
@@ -2686,10 +2526,6 @@ function Library:_renderDropdown(parent, item)
         end
     end, true)
 end
-
--- ============================================================
--- MULTI DROPDOWN
--- ============================================================
 
 function Library:_renderMultiDropdown(parent, item)
     local box = Instance.new("Frame")
@@ -2920,10 +2756,6 @@ function Library:_renderMultiDropdown(parent, item)
     refreshText()
 end
 
--- ============================================================
--- KEYBIND
--- ============================================================
-
 function Library:_renderKeybind(parent, item)
     local box = Instance.new("Frame")
 
@@ -3011,10 +2843,6 @@ function Library:_renderKeybind(parent, item)
     )
 end
 
--- ============================================================
--- CUSTOM GUI
--- ============================================================
-
 function Library:_renderCustomGUI(parent, item)
     local host = Instance.new("Frame")
 
@@ -3038,10 +2866,6 @@ function Library:_renderCustomGUI(parent, item)
         )
     end
 end
-
--- ============================================================
--- BUILD UI
--- ============================================================
 
 function Library:_buildUI()
     if not self.Root or not self.Root.Parent then
@@ -3083,10 +2907,6 @@ function Library:_buildUI()
         margin
     )
 end
-
--- ============================================================
--- MOUNT
--- ============================================================
 
 function Library:Mount(container)
     if not container then
@@ -3147,10 +2967,6 @@ function Library:UnMount()
     return true
 end
 
--- ============================================================
--- DESTROY
--- ============================================================
-
 function Library:Destroy()
     if Destroyed then
         return
@@ -3178,10 +2994,6 @@ function Library:Destroy()
     self.Root = nil
 end
 
--- ============================================================
--- CREATE LIBRARY
--- ============================================================
-
 local function CreateLibrary()
     return setmetatable({
         Tabs = {},
@@ -3208,10 +3020,6 @@ end
 
 local RobloxStudio = CreateLibrary()
 
--- ============================================================
--- CORE GUI INJECTION WATCHER
--- ============================================================
-
 local function ensureMenu()
     if Destroyed then
         return false
@@ -3231,8 +3039,6 @@ local function ensureMenu()
         return false
     end
 
-    -- Hide only the native Help page content layer. The native container
-    -- itself remains untouched, so its original background is preserved.
     if type(injector.PrepareContainer) == "function" then
         pcall(function()
             injector:PrepareContainer(container, "RobloxStudioContent")
@@ -3286,130 +3092,6 @@ end
 
 startWatcher()
 
--- ============================================================
--- DEFAULT API EXAMPLE
--- ============================================================
--- The library itself does not require these.
--- They are intentionally commented so the baseline stays clean.
---
---[[
-local Main = RobloxStudio:AddTab({
-    Name = "Home",
-    Icon = "home"
-})
-
-Main:AddButton({
-    Name = "Example Button",
-    Description = "Example API",
-    Icon = "chevron-right",
-    Callback = function()
-        RobloxStudio:Notify({
-            Title = "[Roblox Studio]",
-            Content = "Button clicked.",
-            Duration = 3
-        })
-    end
-})
-
-Main:AddToggle({
-    Name = "Example Toggle",
-    Flag = "ExampleToggle",
-    CurrentValue = false,
-    Callback = function(value)
-        print("Toggle:", value)
-    end
-})
-
-Main:AddSlider({
-    Name = "Example Slider",
-    Flag = "ExampleSlider",
-    Min = 0,
-    Max = 100,
-    Increment = 1,
-    CurrentValue = 50,
-    Callback = function(value)
-        print("Slider:", value)
-    end
-})
-
-Main:AddDropdown({
-    Name = "Example Dropdown",
-    Flag = "ExampleDropdown",
-    Values = {
-        "Option 1",
-        "Option 2",
-        "Option 3"
-    },
-    CurrentValue = "Option 1",
-    Callback = function(value)
-        print("Dropdown:", value)
-    end
-})
-
-Main:AddMultiDropdown({
-    Name = "Example Multi",
-    Flag = "ExampleMulti",
-    Values = {
-        "A",
-        "B",
-        "C"
-    },
-    CurrentValue = {
-        A = true
-    },
-    Callback = function(values)
-        print("Multi changed.")
-    end
-})
-
-Main:AddTextInput({
-    Name = "Username",
-    Placeholder = "Enter username...",
-    Flag = "Username",
-    Callback = function(text)
-        print(text)
-    end
-})
-
-Main:AddKeybind({
-    Name = "Toggle Key",
-    Flag = "ToggleKey",
-    CurrentKey = Enum.KeyCode.RightShift,
-    Callback = function(key)
-        print(key)
-    end
-})
-
-Main:AddCustomGUI({
-    Name = "Custom",
-    Size = UDim2.new(1, 0, 0, 150),
-
-    Build = function(container, tab, library)
-        local text = Instance.new("TextLabel")
-
-        text.BackgroundTransparency = 1
-        text.Size = UDim2.new(1, -20, 0, 40)
-        text.Position = UDim2.fromOffset(10, 10)
-        text.Text = "Custom GUI"
-        text.TextColor3 = Color3.new(1, 1, 1)
-        text.TextSize = 16
-        text.Font = Enum.Font.GothamBold
-        text.Parent = container
-    end
-})
-]]
-
--- ============================================================
--- STABLE API ALIASES
--- ============================================================
--- The public API is exposed through explicit table methods only.
--- It does not depend on local variable names, debug/source inspection,
--- or caller environment details, making it safer for obfuscated callers.
-
--- ============================================================
--- RETURN
--- ============================================================
-
 function RobloxStudio:SetCoreGuiInjectorURL(url)
     if type(url) ~= "string" or url == "" then
         return false
@@ -3419,10 +3101,6 @@ function RobloxStudio:SetCoreGuiInjectorURL(url)
     Injector = nil
     return true
 end
-
--- ============================================================
--- PUBLIC API ALIASES
--- ============================================================
 
 RobloxStudio.Library = RobloxStudio
 RobloxStudio.CreateTab = function(self, config)
