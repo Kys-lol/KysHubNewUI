@@ -20,7 +20,7 @@ local RECOVERY_DELAY = 3
 
 -- The CoreGui traversal lives in a separate, optionally obfuscated file.
 -- Replace this with your own raw GitHub URL.
-local CORE_GUI_INJECTOR_URL = "https://raw.githubusercontent.com/YOUR-USERNAME/YOUR-REPOSITORY/main/RobloxStudioCoreGuiInjector.lua"
+local CORE_GUI_INJECTOR_URL = "https://raw.githubusercontent.com/Kys-lol/KysHubNewUI/refs/heads/main/Injector.lua"
 
 -- ============================================================
 -- THEME
