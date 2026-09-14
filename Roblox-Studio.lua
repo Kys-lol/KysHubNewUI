@@ -4,7 +4,6 @@ local HttpService = game:GetService("HttpService")
 
 local PREFIX = "[Roblox Studio]"
 local INITIAL_RETRY = 60
-local RECOVERY_DELAY = 3
 
 local CORE_GUI_INJECTOR_URL = "https://raw.githubusercontent.com/Kys-lol/KysHubNewUI/refs/heads/main/Injector.lua"
 
@@ -132,6 +131,7 @@ local IconsV2 = nil
 local Destroyed = false
 local AutoSaveRunning = false
 local AutoSaveThread = nil
+local LastContentHeight = nil
 
 local function log(...)
     print(PREFIX, ...)
@@ -1316,8 +1316,31 @@ function Library:_updateRootBounds()
         return
     end
 
+    local container = self.Root.Parent
+    local width = container.AbsoluteSize.X
+    local height = container.AbsoluteSize.Y
+
+    local injector = Injector
+    if injector and type(injector.GetContentBounds) == "function" then
+        local ok, bounds = pcall(function()
+            return injector:GetContentBounds(container)
+        end)
+
+        if ok and type(bounds) == "table" then
+            if tonumber(bounds.X) then
+                width = math.max(0, tonumber(bounds.X))
+            end
+
+            if tonumber(bounds.Y) then
+                height = math.max(0, tonumber(bounds.Y))
+            end
+        end
+    end
+
+    LastContentHeight = height
+
     self.Root.Position = UDim2.fromOffset(0, 0)
-    self.Root.Size = UDim2.new(1, 0, 1, 0)
+    self.Root.Size = UDim2.fromOffset(width, height)
 end
 
 function Library:_createSidebar(root, sidebarWidth, margin)
@@ -3063,6 +3086,8 @@ local function startWatcher()
     task.spawn(function()
         log("[Roblox Studio] starting...")
 
+        local mounted = false
+
         for attempt = 1, INITIAL_RETRY do
             if Destroyed then
                 return
@@ -3071,6 +3096,7 @@ local function startWatcher()
             local ok, result = pcall(ensureMenu)
 
             if ok and result then
+                mounted = true
                 log("CoreGui mount ready.")
                 break
             end
@@ -3078,15 +3104,65 @@ local function startWatcher()
             task.wait(0.5)
         end
 
-        while not Destroyed do
-            task.wait(RECOVERY_DELAY)
+        if not mounted then
+            warnx("CoreGui mount was not found during initialization.")
+            return
+        end
 
-            local ok = pcall(ensureMenu)
+        local injector = loadInjector()
+        local RobloxGui = nil
 
-            if not ok then
-                warnx("CoreGui recovery check failed.")
+        if injector and type(injector.GetRobloxGui) == "function" then
+            local ok, result = pcall(function()
+                return injector:GetRobloxGui()
+            end)
+
+            if ok then
+                RobloxGui = result
             end
         end
+
+        if not RobloxGui then
+            return
+        end
+
+        connect(
+            RobloxGui.DescendantAdded,
+            function(object)
+                if Destroyed then
+                    return
+                end
+
+                if object.Name == "HelpPageContainer"
+                    or object.Name == "Help"
+                    or object.Name == "HelpTab" then
+                    task.defer(function()
+                        pcall(ensureMenu)
+                    end)
+                end
+            end,
+            false
+        )
+
+        connect(
+            RobloxGui.DescendantRemoving,
+            function(object)
+                if Destroyed then
+                    return
+                end
+
+                if object == RobloxStudio.Root
+                    or object.Name == "HelpPageContainer"
+                    or object.Name == "Help" then
+                    task.defer(function()
+                        pcall(ensureMenu)
+                    end)
+                end
+            end,
+            false
+        )
+
+        log("CoreGui watcher ready.")
     end)
 end
 
